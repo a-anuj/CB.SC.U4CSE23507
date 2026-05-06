@@ -166,3 +166,106 @@
 ```
 
 
+
+## Stage 2: Database Design & Persistence
+
+
+### Database Choice: PostgreSQL (Relational DB)
+
+**Reason:**
+- ACID properties helps in data consistency
+- Complex queries are possible using JOINs
+- Built-in JSON support for metadata
+- Scalable with proper indexing
+- Cost-effective for structured notification data
+
+### Database Schema
+
+```sql
+-- Notifications table
+CREATE TABLE notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type VARCHAR(50) NOT NULL CHECK (type IN ('email_event', 'system_alert', 'reminder')),
+  title VARCHAR(255) NOT NULL,
+  message TEXT,
+  is_read BOOLEAN DEFAULT FALSE,
+  metadata JSONB,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL
+);
+
+-- Notification preferences table
+CREATE TABLE notification_preferences (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  email_enabled BOOLEAN DEFAULT TRUE,
+  sms_enabled BOOLEAN DEFAULT FALSE,
+  push_enabled BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indices for performance
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX idx_notifications_is_read ON notifications(is_read);
+CREATE INDEX idx_notifications_created_at ON notifications(created_at DESC);
+CREATE INDEX idx_notifications_user_is_read ON notifications(user_id, is_read);
+CREATE INDEX idx_notifications_deleted_at ON notifications(deleted_at);
+```
+
+### Scalability Challenges & Solutions
+
+**Challenge 1: Query Performance with Volume Growth**
+- *Problem:* Fetching notifications for users with millions of records becomes slow
+- *Solution:* Partition notifications based on time or archive the old notifications
+
+**Challenge 2: Storage Growth**
+- *Problem:* Database size explodes with notification history
+- *Solution:* Archive the notifications which are older than 90 days to separate storage
+
+**Challenge 3: Concurrent Read/Write**
+- *Problem:* High update rate when marking notifications as read
+- *Solution:* Caching layer (Redis) can be used for recent notification status
+
+### SQL Queries
+
+#### Query 1: Fetch Unread Notifications
+```sql
+SELECT * FROM notifications
+WHERE user_id = $1
+  AND is_read = FALSE
+  AND deleted_at IS NULL
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+```
+
+#### Query 2: Mark Notification as Read
+```sql
+UPDATE notifications
+SET is_read = TRUE,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+  AND user_id = $2
+RETURNING *;
+```
+
+#### Query 3: Delete Notification (Soft Delete)
+```sql
+UPDATE notifications
+SET deleted_at = CURRENT_TIMESTAMP
+WHERE id = $1
+  AND user_id = $2
+RETURNING *;
+```
+
+#### Query 4: Get Unread Count for User
+```sql
+SELECT COUNT(*) as unread_count
+FROM notifications
+WHERE user_id = $1
+  AND is_read = FALSE
+  AND deleted_at IS NULL;
+```
+
