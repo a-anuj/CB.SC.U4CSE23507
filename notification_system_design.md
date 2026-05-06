@@ -436,3 +436,29 @@ function process_email_job(job) {
 - Delivery can scale horizontally.
 - Failed emails or push notifications can be retried independently.
 - The notification history remains available for audit.
+
+## Stage 6: Priority Inbox Implementation
+
+The product now needs a Priority Inbox showing the top N unread notifications by importance and recency.
+Notifications arrive continuously and must be ranked on demand.
+
+### Priority scoring
+- `Placement` notifications get the highest weight.
+- `Result` notifications get medium weight.
+- `Event` notifications get lower weight.
+- Newer notifications should rank above older ones.
+
+**Code for priority inbox is present inside vehicle_maintenance_scheduler as stage_6_priority_inbox.py**
+
+
+### Efficiency notes
+- Use a min-heap of size N so only the top 10 notifications are kept.
+- This is efficient even if the API returns many unread notifications.
+- Cache the top 10 for a short duration (e.g. 30 seconds) to reduce repeated ranking work.
+- Because the data must come from the API, this logic runs in the app layer rather than the DB layer.
+
+### Result delivery
+- Return the top 10 unread notifications in priority order.
+- Refresh when the user opens the inbox or when new notification events arrive.
+- Keep notifications sorted by score, then by timestamp for ties.
+
