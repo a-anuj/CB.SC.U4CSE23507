@@ -317,3 +317,80 @@ WHERE n.notificationType = 'Placement'
 ORDER BY n.createdAt DESC;
 ```
 
+
+## Stage 4: Database Indexing Strategy
+
+### Performance Optimization Strategy
+
+**Problem:** DB overwhelmed with read requests on every page load
+
+**Multi-Layer Solution:**
+
+#### 1. Caching Layer (Redis)
+```
+Frontend Request → API Server → Redis Cache → PostgreSQL DB
+```
+
+**Cache Strategy:**
+- Store recent notifications in Redis with 5-minute TTL
+- Cache unread count separately with 1-minute TTL
+- Invalidate on new notification creation
+
+**Implementation:**
+```python
+# Pseudocode
+cache_key = f"notifications:{user_id}:recent"
+cached_data = redis.get(cache_key)
+
+if cached_data:
+    return cached_data
+else:
+    notifications = db.query(user_id)
+    redis.setex(cache_key, 300, notifications)  # 5 min TTL
+    return notifications
+```
+
+#### 2. Database Indexing
+- Composite index on `(studentId, isRead, createdAt DESC)`
+- Separate index on `createdAt` for archival queries
+- Index on `notificationType` for filtering
+
+#### 3. Pagination
+- Limit fetched records: `LIMIT 20 OFFSET 0`
+- Client-side: Load more functionality
+- Reduces payload size significantly
+
+#### 4. Database Partitioning
+- Partition by month: `notifications_2024_01`, `notifications_2024_02`
+- Query only recent partitions for active users
+- Archive old data separately
+
+#### 5. Read Replicas
+- Setup PostgreSQL read replicas
+- Route read traffic to replicas
+- Write operations to primary only
+
+### Expected Performance Improvement
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Response Time | 8-15s | 200-500ms |
+| DB CPU Usage | 85-95% | 15-25% |
+| Concurrent Users | 50-100 | >500 |
+| Data Transferred | 2-5MB | 100-200KB |
+
+---
+
+**How is this effective:**
+- Redis caching eliminates repeated DB queries
+- Proper indexing reduces query execution time
+- Pagination limits data transfer
+- Read replicas distribute load
+- Partitioning speeds up queries on large datasets
+
+**Tradeoffs:**
+- Cache invalidation is complex
+- Stale data if TTL too long
+- Infrastructure complexity increases
+- Requires careful monitoring
+
