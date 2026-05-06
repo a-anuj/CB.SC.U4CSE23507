@@ -394,3 +394,45 @@ else:
 - Infrastructure complexity increases
 - Requires careful monitoring
 
+
+## Stage 5: Bulk Notification Reliability
+
+
+### Shortcomings
+- `send_email` blocks the loop, so 50,000 deliveries are slow and prone to timeout.
+- If email fails mid-process, DB writes may still happen, causing inconsistent state.
+- Failure handling is missing.
+- Coupling persistence and delivery prevents scaling.
+
+### Revised workflow
+1. Save notification metadata first.
+2. Enqueue delivery jobs for email and push.
+3. Process delivery asynchronously with retries.
+4. Use the notification record as the source of truth.
+
+### Revised pseudocode
+
+```js
+function notify_all(student_ids, message) {
+  for (const student_id of student_ids) {
+    const notification = save_to_db(student_id, message)
+    enqueue_job('email', { student_id, message, notification_id: notification.id })
+    enqueue_job('push', { student_id, message, notification_id: notification.id })
+  }
+}
+
+function process_email_job(job) {
+  try {
+    send_email(job.student_id, job.message)
+    mark_notification_sent(job.notification_id, 'email')
+  } catch (error) {
+    retry_or_dead_letter(job)
+  }
+}
+```
+
+### Why this is better
+- Deletes partial failure conditions.
+- Delivery can scale horizontally.
+- Failed emails or push notifications can be retried independently.
+- The notification history remains available for audit.
