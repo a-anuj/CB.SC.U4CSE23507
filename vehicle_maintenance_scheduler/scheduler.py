@@ -210,9 +210,7 @@ def main():
         print(f"Error: {results['error']}")
         return
     
-    print("\n" + "="*60)
-    print("VEHICLE MAINTENANCE SCHEDULING RESULTS")
-    print("="*60)
+    print("\nVEHICLE MAINTENANCE SCHEDULING RESULTS")
     print(f"Depot ID: {results.get('depot_id')}")
     print(f"Available Mechanic-Hours: {results.get('available_mechanic_hours')}")
     print(f"Total Vehicles Found: {results.get('total_vehicles_available')}")
