@@ -269,3 +269,51 @@ WHERE user_id = $1
   AND deleted_at IS NULL;
 ```
 
+
+## Stage 3: Query Optimization & Performance
+
+### Query Analysis
+
+**Is this query accurate?** Yes, functionally correct but inefficient.
+
+**Why is it slow?**
+1. No indexes on `studentId` and `isRead` columns
+2. Full table scan required to check all 5 million notifications
+3. Sorting on unindexed `createdAt` column is expensive
+4. Multiple database server round-trips for large result sets
+
+### Proposed Solution: Strategic Indexing
+
+**Create Composite Index:**
+```sql
+CREATE INDEX idx_notifications_user_status_time 
+ON notifications(studentId, isRead, createdAt DESC);
+```
+
+**Optimized Query:**
+```sql
+SELECT id, studentId, message, createdAt, notificationType
+FROM notifications
+WHERE studentId = 1862 
+  AND isRead = false
+LIMIT 100
+ORDER BY createdAt DESC;
+```
+
+**Benefits:**
+- Index covers all query columns (Index-only scan possible)
+- Query execution time: ~50-100ms (vs 5-10 seconds previously)
+- Server-side sorting becomes efficient
+
+### Query to Find Placement Notifications
+
+```sql
+SELECT DISTINCT s.studentId, s.studentName, n.message, n.createdAt
+FROM notifications n
+INNER JOIN students s ON n.studentId = s.studentId
+WHERE n.notificationType = 'Placement'
+  AND n.createdAt >= CURRENT_TIMESTAMP - INTERVAL '7 days'
+  AND n.isRead = false
+ORDER BY n.createdAt DESC;
+```
+
