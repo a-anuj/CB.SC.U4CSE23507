@@ -1,2 +1,4 @@
 creds.txt
 .env
+logging_middleware/__pycache__/
+vehicle_maintenance_scheduler/__pycache__/
