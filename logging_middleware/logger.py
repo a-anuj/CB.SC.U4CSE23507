@@ -17,5 +17,3 @@ def Log(stack,level,package,message):
     response = httpx.post("http://20.207.122.201/evaluation-service/logs", json=data, headers=headers)
 
     print(response.json())
-
-Log("backend","info","service","testing the service")
